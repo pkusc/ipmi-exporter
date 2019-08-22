@@ -1,0 +1,51 @@
+#! /bin/bash
+
+set -u
+
+COLLECT_INTERVAL_MS=1000
+OUTPUT_FILE=/run/prometheus/ipmitool.prom
+IPMITOOL_TEXT_COLLECTOR="/usr/share/doc/golang-github-prometheus-node_exporter-0.18.1/text_collector_examples/ipmitool"
+
+usage() {
+    echo "usage: $0 [-h] [-o output_file] [-d collect_interval_ms (>=100)]" >&2
+}
+
+options=$(getopt -o ho:d: -- "$@")
+if [ $? -ne 0 ]; then
+    usage && exit 1
+fi
+eval set -- "${options}"
+
+while true; do
+    case "$1" in
+        -h) usage && exit 1;;
+        -o) OUTPUT_FILE=$2; shift 2;;
+        -d) COLLECT_INTERVAL_MS=$2; shift 2;;
+        *)  break;;
+    esac
+done
+
+if [ "${COLLECT_INTERVAL_MS}" -lt 100 ]; then
+    usage && exit 1
+fi
+COLLECT_INTERVAL_SECONDS=$(bc <<< "scale=4;${COLLECT_INTERVAL_MS}/1000")
+
+if [ ! -f $IPMITOOL_TEXT_COLLECTOR ]; then
+    echo IPMItool textfile collector from node_exporter not found at \"$IPMITOOL_TEXT_COLLECTOR\". && exit 1
+fi
+
+mkdir -p $(dirname ${OUTPUT_FILE})
+trap 'echo "Caught signal, terminating..." && kill %%' HUP INT QUIT PIPE TERM
+
+echo "Collecting metrics at ${OUTPUT_FILE} every ${COLLECT_INTERVAL_MS}ms..."
+
+while true; do
+	ipmitool sensor | $IPMITOOL_TEXT_COLLECTOR > ${OUTPUT_FILE}.swp
+	mv ${OUTPUT_FILE}.swp ${OUTPUT_FILE}
+	sleep ${COLLECT_INTERVAL_SECONDS}
+done &
+
+wait $!
+
+echo "Done"
+exit 0

@@ -1,0 +1,10 @@
+[Unit]
+Description=Prometheus IPMItool exporter
+
+[Service]
+Type=simple
+Restart=always
+ExecStart=/usr/local/bin/ipmitool-exporter
+
+[Install]
+WantedBy=multi-user.target
